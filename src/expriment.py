@@ -178,19 +178,19 @@ def move_until_touch():
 def angle_correction(pitch_or_yaw, η): #逐次補正のコア部分
   #使う成分の指定(0:x, 1:y, 2:z)
   if pitch_or_yaw == "pitch":
-    n = 2
+    r = 2
   elif pitch_or_yaw == "yaw":
-    n = 1  
+    r = 1  
   else:
     print("Error setting pitch or yaw")
     sys.exit()
 
   #初回の補正
   f0 = calculate_force_ratio([x - y for x, y in zip(f_filtered, initial_force)])
-  Δθ1 = math.degrees(math.atan(f0[n]/f0[0])) #単位は度
-  #print("Δθ1=",θ1)
+  Δθ1 = math.degrees(math.atan(f0[r]/f0[0])) #単位は度
+  #print("Δθ1=",Δθ1)
   angle = [0,0,0]
-  angle[n] = Δθ1
+  angle[r] = Δθ1
   rotate(angle, 0.02)
 
   #2回目以降の補正
@@ -199,14 +199,51 @@ def angle_correction(pitch_or_yaw, η): #逐次補正のコア部分
   while Δθi > 0.5:
     f0 = f1
     f1 = calculate_force_ratio([x - y for x, y in zip(f_filtered, initial_force)])
-    Δθi = Δθi * f1[n] * η / (f1[n] - f0[n])
-    angle[n] = Δθi
+    Δθi = Δθi * f1[r] * η / (f1[r] - f0[r])
+    angle[r] = Δθi
     #print("Δθi=",Δθi)
     rotate(angle, 0.02)
 
   #print("Finish correction ", pitch_or_yaw)
 
+def angle_integration(pitch_or_yaw, n): #統合補正のコア部分
+  #使う成分の指定(0:x, 1:y, 2:z)
+  if pitch_or_yaw == "pitch":
+    r = 2
+  elif pitch_or_yaw == "yaw":
+    r = 1  
+  else:
+    print("Error setting pitch or yaw")
+    sys.exit()
 
+  
+  angle = [0,0,0]
+  Δθ = []
+  ΔΦ = []
+  #初回の補正
+  f0 = calculate_force_ratio([x - y for x, y in zip(f_filtered, initial_force)])
+  ΔΦ[0] = math.degrees(-1 * math.atan(f0[r]/f0[0])) #単位は度
+  #print("Δθ1=",Δθ[0])
+  Δθ[0] = ΔΦ[0] + 1
+  angle[r] = Δθ
+  rotate(angle, 0.02)
+
+  #2回目以降の補正
+  for i in range(n):
+    fi = calculate_force_ratio([x - y for x, y in zip(f_filtered, initial_force)])
+    ΔΦ[i+1] = math.degrees(-1 * math.atan(fi[r]/fi[0])) #単位は度
+    #print("Δθi=",Δθ[i+1])
+    Δθ[i+1] = ΔΦ[i+1] + 1
+    angle[r] = Δθ[i+1]
+    rotate(angle, 0.02)
+
+  #最終的な補正値の決定
+  Δθ_mean = (sum(Δθ) + sum(ΔΦ))/(n+1)
+  angle[r] = Δθ_mean - sum(Δθ)
+  rotate(angle, 0.02)
+
+
+  #print("Finish correction ", pitch_or_yaw)
 
 
 
