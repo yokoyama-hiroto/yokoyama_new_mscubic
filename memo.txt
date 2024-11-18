@@ -1,0 +1,6 @@
+roslaunch new_mscubic demo_only.launch
+    Rvizのみの起動
+roslaunch new_mscubic demo_gazebo.launch
+    Rvizとgazeboの起動
+
+ms_cubicのur5.urdfを用いている

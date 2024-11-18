@@ -1,0 +1,11 @@
+moveit_setup_assistant_config:
+  URDF:
+    package: ms_cubic
+    relative_path: config/ur5.urdf
+    xacro_args: ""
+  SRDF:
+    relative_path: config/ur5.srdf
+  CONFIG:
+    author_name: y
+    author_email: 6@gmail.com
+    generated_timestamp: 1722412618
