@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.1.3)
-project(new_mscubic)
+project(yokoyama_new_mscubic)
 
 find_package(catkin REQUIRED)
 
