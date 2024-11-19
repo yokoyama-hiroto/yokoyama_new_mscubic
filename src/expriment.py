@@ -44,7 +44,7 @@ def low_pass_filter(raw_force_value): #センサ値をローパスフィルタ�
   return f_filtered
 
 def calculate_force_absolute(f): #絶対値を算出
-  f_absolute = math.sqrt(f[0]^2 + f[1]^2 + f[2]^2)
+  f_absolute = math.sqrt(f[0]*f[0] + f[1]*f[1] + f[2]*f[2])
   return f_absolute
 
 def calculate_force_ratio(f): #センサー値の成分比率を算出
@@ -53,7 +53,7 @@ def calculate_force_ratio(f): #センサー値の成分比率を算出
   return f_ratio
 
 def get_current_pose(): #現在のtcpの位置姿勢を取得
-  current_pose = group_arm.get_current_pose("tcp").pose #実機では名が違う
+  current_pose = group_arm.get_current_pose("tool0").pose #実機では名が違う
   return current_pose
 
 def euler_to_quaternion(euler):
@@ -185,7 +185,7 @@ def angle_rotate_find(pitch_or_yaw): #回転計測
   
   f = [0, 0]
   angle = [0, 0, 0]
-  f[0] = calculate_force_ratio([x - y for x, y in zip(f_filtered, initial_force)])
+  f[0] = calculate_force_ratio([x - y for x, y in zip(filtered_force_value, initial_force)])
   f[1] = f[0]
   if f[0] > 0.1:
     angle[r] = 0.1
@@ -193,9 +193,9 @@ def angle_rotate_find(pitch_or_yaw): #回転計測
     angle[r] = 0.1
   rotate(angle, 0.02)
 
-  while f[1] > 0.1:
+  while abs(f[1]) > 0.1:
     f[0] = f[1]
-    f[1] = calculate_force_ratio([x - y for x, y in zip(f_filtered, initial_force)])
+    f[1] = calculate_force_ratio([x - y for x, y in zip(filtered_force_value, initial_force)])
     if f[0] > f[1]:
       angle[r] = 0.1
     else:
@@ -221,7 +221,7 @@ def angle_correction(pitch_or_yaw, η): #逐次補正のコア部分
     sys.exit()
 
   #初回の補正
-  f0 = calculate_force_ratio([x - y for x, y in zip(f_filtered, initial_force)])
+  f0 = calculate_force_ratio([x - y for x, y in zip(filtered_force_value, initial_force)])
   Δθ1 = math.degrees(math.atan(f0[r]/f0[0])) #単位は度
   #print("Δθ1=",Δθ1)
   angle = [0,0,0]
@@ -233,7 +233,7 @@ def angle_correction(pitch_or_yaw, η): #逐次補正のコア部分
   Δθi = Δθ1
   while Δθi > 0.5:
     f0 = f1
-    f1 = calculate_force_ratio([x - y for x, y in zip(f_filtered, initial_force)])
+    f1 = calculate_force_ratio([x - y for x, y in zip(filtered_force_value, initial_force)])
     Δθi = Δθi * f1[r] * η / (f1[r] - f0[r])
     angle[r] = Δθi
     #print("Δθi=",Δθi)
@@ -256,7 +256,7 @@ def angle_integration(pitch_or_yaw, n): #統合補正のコア部分
   Δθ = []
   ΔΦ = []
   #初回の補正
-  f0 = calculate_force_ratio([x - y for x, y in zip(f_filtered, initial_force)])
+  f0 = calculate_force_ratio([x - y for x, y in zip(filtered_force_value, initial_force)])
   ΔΦ[0] = math.degrees(-1 * math.atan(f0[r]/f0[0])) #単位は度
   #print("Δθ1=",Δθ[0])
   Δθ[0] = ΔΦ[0] + 1
@@ -265,7 +265,7 @@ def angle_integration(pitch_or_yaw, n): #統合補正のコア部分
 
   #2回目以降の補正
   for i in range(n):
-    fi = calculate_force_ratio([x - y for x, y in zip(f_filtered, initial_force)])
+    fi = calculate_force_ratio([x - y for x, y in zip(filtered_force_value, initial_force)])
     ΔΦ[i+1] = math.degrees(-1 * math.atan(fi[r]/fi[0])) #単位は度
     #print("Δθi=",Δθ[i+1])
     Δθ[i+1] = ΔΦ[i+1] + 1
@@ -284,47 +284,59 @@ def angle_integration(pitch_or_yaw, n): #統合補正のコア部分
 
 
 def angle_correction_experiment():
+  move_until_touch()
   angle_correction("pitch", 0.5)
 
 def drill_experiment():
-  home_position()
-  global initial_force
-  initial_force = f_filtered
-  move_drill_system([0.1, 0.0, 0.0], 0.02)
+  angle_correction("pitch", 0.02)
 
 
 def execute_experiment():
   global initial_force
   home_position()
-  move_global_system([0.5, 0.0, 0.0], 0.5)
-  initial_force = f_filtered
-  print("Set initial")
-
-  experiment_type = input("input experiment type a or d")
-  if experiment_type == "a":
-    angle_correction_experiment()
-  elif experiment_type == "d":
-    drill_experiment()
-
+  setting_initial = move_global_system([1.0, 0.0, 0.0], 0.5)
+  if setting_initial:
+    initial_force = filtered_force_value
+    print("Set initial")
+    experiment_type = input("experiment type (a:angle or d:drill)")
+    if experiment_type == "a":
+      angle_correction_experiment()
+    elif experiment_type == "d":
+      drill_experiment()
+    else:
+      print("Input correct type")
+      sys.exit()
   else:
-    print("Input correct type")
+    print("Error during setting initial")
     sys.exit()
 
 
 
 if __name__ == '__main__':
   try:
-    rospy.init_node('drillanglecorrection')
+    environment = input("1:simulation or 2:real robot")
+    if environment == "1":
+      ur5_arm = "ur5_arm"
+      rostopic_force = "ft_sensor/raw"
+    elif environment == "2":
+      ur5_arm ="universal_robot"
+      rostopic_force = "/force"
+    else:
+      print("Input 1 or 2")
+      sys.exit()
+
+    rospy.init_node('DrillAngleCorrection')
     moveit_commander.roscpp_initialize(sys.argv)
+
 
     robot = moveit_commander.RobotCommander()
     scene = moveit_commander.PlanningSceneInterface()
-    group_arm = moveit_commander.MoveGroupCommander("ur5_arm") #実機では名が違う
+    group_arm = moveit_commander.MoveGroupCommander(ur5_arm)
 
     group_arm.set_max_velocity_scaling_factor(1.0)
 
     # 力センサのトピックをSubscribeするコールバック関数を設定
-    rospy.Subscriber('ft_sensor/raw', WrenchStamped, force_sensor_callback) #実機ではtopic名が違う
+    rospy.Subscriber(rostopic_force, WrenchStamped, force_sensor_callback)
 
     # ロボットの制御を行うスレッドを開始
     control_thread = threading.Thread(target=execute_experiment())

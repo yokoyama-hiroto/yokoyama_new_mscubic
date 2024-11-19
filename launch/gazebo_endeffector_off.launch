@@ -13,7 +13,7 @@
   </include>
 
   <!-- Set the robot urdf on the parameter server -->
-  <param name="robot_description" textfile="$(find ur_description)/urdf/ur5_joint_limited_robot.urdf.xacro" />
+  <param name="robot_description" textfile="$(find new_mscubic)/config/ur5_endeffector_off.urdf" />
 
   <!-- Unpause the simulation after loading the robot model -->
   <arg name="unpause" value="$(eval '' if arg('paused') else '-unpause')" />
