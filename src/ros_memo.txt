@@ -1,2 +1,15 @@
 moveit source
 https://github.com/moveit/moveit/blob/master/moveit_commander/src/moveit_commander/move_group.py
+
+
+
+
+
+
+11/19時点の問題点
+・モデルが振動しており、開始地点がずれているというエラーにより制御が出来ない
+エラー内容:  [ERROR] [1732004638.272981377, 13.616000000]:
+            Invalid Trajectory: start point deviates from current robot state more than 0.01
+            joint 'elbow_joint': expected: 1.76447, current: 2.00274
+-->モデルの振動に関わらず(ur5_gripper_moveit_configでも振動はしていないように見えるが同様のエラーが発生<--別件だと思われるがwarningが大量に表示される)
+・move_until_touch()を動かそうとしたときに力センサ値が更新されず、0で割ることになりエラーとなる

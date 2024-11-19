@@ -293,7 +293,8 @@ def drill_experiment():
 def execute_experiment():
   global initial_force
   home_position()
-  setting_initial = move_global_system([1.0, 0.0, 0.0], 0.5)
+  #rotate([0, 0, 1], 0.5) #0,1,3,5初期入射角設定
+  setting_initial = move_global_system([1.0, 0.0, 0.0], 0.5) #加工位置決定
   if setting_initial > 0.5:
     initial_force = filtered_force_value
     print("Set initial")
