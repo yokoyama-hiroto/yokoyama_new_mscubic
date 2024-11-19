@@ -173,7 +173,7 @@ def move_until_touch():
       sys.exit()
   return True
 
-def angle_rotate_find(pitch_or_yaw):
+def angle_rotate_find(pitch_or_yaw): #回転計測
   #使う成分の指定(0:x, 1:y, 2:z)
   if pitch_or_yaw == "pitch":
     r = 2

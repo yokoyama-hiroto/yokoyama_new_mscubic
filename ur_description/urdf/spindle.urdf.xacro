@@ -1,0 +1,33 @@
+<?xml version="1.0"?>
+
+<robot name="spindle" xmlns:xacro="http://www.ros.org/wiki/xacro">
+  
+  <xacro:macro name="spindle" params="prefix parent *origin">
+
+    <link name="spindle">
+      <visual>
+        <geometry>
+          <mesh filename="package://ur_description/meshes/ur5/visual/endeffecter_MScubic_mini.stl"/>
+        </geometry>
+        <material name="LightGrey">
+          <color rgba="1.0 0.7 0.7 1.0" />
+        </material>
+      </visual>
+      <collision>
+        <geometry>
+          <mesh filename="package://ur_description/meshes/ur5/collision/endeffecter_MScubic_mini.stl"/>
+        </geometry>
+      </collision>
+      <inertial>
+        <mass value="0.236951" />
+        <origin xyz="0.0 0.0 0.0" />
+        <inertia ixx = "0.000380" ixy = "0.000000" ixz = "0.000000"
+             iyx = "0.000000" iyy = "0.001110" iyz = "0.000000"
+             izx = "0.000000" izy = "0.000000" izz = "0.001171" />
+      </inertial>
+    </link>
+
+    
+
+  </xacro:macro>
+</robot>
