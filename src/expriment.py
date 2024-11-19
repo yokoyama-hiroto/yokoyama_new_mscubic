@@ -173,6 +173,41 @@ def move_until_touch():
       sys.exit()
   return True
 
+def angle_rotate_find(pitch_or_yaw):
+  #使う成分の指定(0:x, 1:y, 2:z)
+  if pitch_or_yaw == "pitch":
+    r = 2
+  elif pitch_or_yaw == "yaw":
+    r = 1  
+  else:
+    print("Error setting pitch or yaw")
+    sys.exit()
+  
+  f = [0, 0]
+  angle = [0, 0, 0]
+  f[0] = calculate_force_ratio([x - y for x, y in zip(f_filtered, initial_force)])
+  f[1] = f[0]
+  if f[0] > 0.1:
+    angle[r] = 0.1
+  elif f[0] < 0.1:
+    angle[r] = 0.1
+  rotate(angle, 0.02)
+
+  while f[1] > 0.1:
+    f[0] = f[1]
+    f[1] = calculate_force_ratio([x - y for x, y in zip(f_filtered, initial_force)])
+    if f[0] > f[1]:
+      angle[r] = 0.1
+    else:
+      angle[r] = -0.1
+    rotate(angle, 0.02)
+
+  #print("Finish correction ", pitch_or_yaw)
+  
+
+
+
+
 
 
 def angle_correction(pitch_or_yaw, η): #逐次補正のコア部分
@@ -249,11 +284,7 @@ def angle_integration(pitch_or_yaw, n): #統合補正のコア部分
 
 
 def angle_correction_experiment():
-  home_position()
-  global initial_force
-  initial_force = f_filtered
-  move_global_system([1.0, 0.0, 0.0], 0.5)
-  print("Finish")
+  angle_correction("pitch", 0.5)
 
 def drill_experiment():
   home_position()
@@ -263,7 +294,13 @@ def drill_experiment():
 
 
 def execute_experiment():
-  experiment_type = input("input experiment type")
+  global initial_force
+  home_position()
+  move_global_system([0.5, 0.0, 0.0], 0.5)
+  initial_force = f_filtered
+  print("Set initial")
+
+  experiment_type = input("input experiment type a or d")
   if experiment_type == "a":
     angle_correction_experiment()
   elif experiment_type == "d":
