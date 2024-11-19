@@ -53,7 +53,7 @@ def calculate_force_ratio(f): #センサー値の成分比率を算出
   return f_ratio
 
 def get_current_pose(): #現在のtcpの位置姿勢を取得
-  current_pose = group_arm.get_current_pose("tool0").pose #実機では名が違う
+  current_pose = group_arm.get_current_pose("tool0").pose #tool0 or tcp
   return current_pose
 
 def euler_to_quaternion(euler):
@@ -164,7 +164,7 @@ def move_drill_system(distance, speed): #手先座標
   return fraction #直線パスの成功率
 
 def move_until_touch():
-  f_absolute = calculate_force_absolute(f_current)
+  f_absolute = calculate_force_absolute([x - y for x, y in zip(filtered_force_value, initial_force)])
   while f_absolute < f_threshold:
     is_moved = move_drill_system([0.001, 0, 0], 0.02)
     f_absolute = calculate_force_absolute(f_current)
@@ -172,6 +172,8 @@ def move_until_touch():
       print("Error during moveing")
       sys.exit()
   return True
+
+
 
 def angle_rotate_find(pitch_or_yaw): #回転計測
   #使う成分の指定(0:x, 1:y, 2:z)
@@ -204,12 +206,6 @@ def angle_rotate_find(pitch_or_yaw): #回転計測
 
   #print("Finish correction ", pitch_or_yaw)
   
-
-
-
-
-
-
 def angle_correction(pitch_or_yaw, η): #逐次補正のコア部分
   #使う成分の指定(0:x, 1:y, 2:z)
   if pitch_or_yaw == "pitch":
@@ -285,9 +281,12 @@ def angle_integration(pitch_or_yaw, n): #統合補正のコア部分
 
 def angle_correction_experiment():
   move_until_touch()
-  angle_correction("pitch", 0.5)
+  angle_rotate_find("pitch")
+  #angle_correction("pitch", 0.5)
+  #angle_integration("pitch", 4)
 
 def drill_experiment():
+  move_until_touch()
   angle_correction("pitch", 0.02)
 
 
@@ -295,10 +294,10 @@ def execute_experiment():
   global initial_force
   home_position()
   setting_initial = move_global_system([1.0, 0.0, 0.0], 0.5)
-  if setting_initial:
+  if setting_initial > 0.5:
     initial_force = filtered_force_value
     print("Set initial")
-    experiment_type = input("experiment type (a:angle or d:drill)")
+    experiment_type = input("experiment type (a:angle correction or d:drilling)")
     if experiment_type == "a":
       angle_correction_experiment()
     elif experiment_type == "d":
@@ -319,15 +318,14 @@ if __name__ == '__main__':
       ur5_arm = "ur5_arm"
       rostopic_force = "ft_sensor/raw"
     elif environment == "2":
-      ur5_arm ="universal_robot"
-      rostopic_force = "/force"
+      ur5_arm ="manipulator"
+      rostopic_force = "wrench"
     else:
       print("Input 1 or 2")
       sys.exit()
 
     rospy.init_node('DrillAngleCorrection')
     moveit_commander.roscpp_initialize(sys.argv)
-
 
     robot = moveit_commander.RobotCommander()
     scene = moveit_commander.PlanningSceneInterface()
