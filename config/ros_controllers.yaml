@@ -44,12 +44,12 @@ ur5_arm_controller:
     - wrist_3_joint
   gains:
     shoulder_pan_joint:
-      p: 10000
-      d: 50
+      p: 50000
+      d: 100
       i: 10
       i_clamp: 100
     shoulder_lift_joint:
-      p: 50000
+      p: 5000
       d: 30
       i: 10
       i_clamp: 400
@@ -64,12 +64,12 @@ ur5_arm_controller:
       i: 1
       i_clamp: 100
     wrist_2_joint:
-      p: 100
-      d: 1
+      p: 1000
+      d: 10
       i: 0.01
       i_clamp: 100
     wrist_3_joint:
-      p: 50
-      d: 1
+      p: 1000
+      d: 10
       i: 0.01
       i_clamp: 100

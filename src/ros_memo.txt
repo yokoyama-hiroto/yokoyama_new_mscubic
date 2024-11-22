@@ -12,4 +12,57 @@ https://github.com/moveit/moveit/blob/master/moveit_commander/src/moveit_command
             Invalid Trajectory: start point deviates from current robot state more than 0.01
             joint 'elbow_joint': expected: 1.76447, current: 2.00274
 -->モデルの振動に関わらず(ur5_gripper_moveit_configでも振動はしていないように見えるが同様のエラーが発生<--別件だと思われるがwarningが大量に表示される)
+trajectory_execution.launch.xmlファイルの<param name="trajectory_execution/allowed_start_tolerance" value="0.3"/>
+のvalueを変更することで許容範囲を拡大しとりあえず解決
+
 ・move_until_touch()を動かそうとしたときに力センサ値が更新されず、0で割ることになりエラーとなる
+(-->基準値を取ったところから動いていないため？)
+-->initial_forceへの値の代入が参照の値渡しになっているため常にinitial_force=filtered_force_valueになってしまうのでinitial_force=copy.copy(filtered_force_value)にする
+
+・ソースコードのCRLFに注意:LFにしないと改行文字が入りエラー
+
+・ロボットコントローラのPゲインは高い方が上手くいく確率が高そう
+
+
+・実行環境による固有名詞の違いを整理するためにenvironmentという変数を作成したが、この名前が良くなかった(変えたら動いた)<--特に予約語であるわけでもないため原因は不明
+
+・compute_catesian_pathで上手くいかない:pathを出力すると開始点1点分しかなく、速度加速度の欄が空白-->waypointを増やす, 分割量を変えると上手くいく？
+・group_armをglobal変数としていたが(代入に失敗しているわけではないのに)compute_cartesian_pathに影響が出ている可能性
+-->homeに戻る関数は問題なく動いているので原因はここではないかもしれないが、もともと動いていた関数をgroup_armをglobal変数として引数を取らない形にしたらpathの計算自体はできているが動かなかった
+
+・pathが計算できているが動かない問題
+エラー内容: [ERROR] [1732084885.614918820, 15.629000000]: Trajectory message contains waypoints that are not strictly increasing in time.
+-->planの計算時に一つ目と二つ目がnsec=0,位置,速度,加速度がすべて一致している結果が出力されるとエラー(waypoint間が狭すぎると起こる?)
+-->scaling_plan()関数により一つ目を削除することにより解決
+
+・fraction(pathの成功率)が低い問題について
+-->特異点付近で軌道が上手く計算できなかった可能性　(原因を特定しきっちり解決できた情報は見つからなかった)
+(参考)https://github.com/moveit/moveit/issues/3183
+
+・直線的には動かないけど、回転は動く
+-->違いは何？
+
+・call_back関数が悪さをしている可能性(センサー値を拾う関数がないとfraction=0.7程度で動く)
+-->import WrenchStampedを入れたら動かなくなったが消しても戻らなくなってしまった
+
+
+
+position:
+  x: 0.29758560420394264
+  y: 0.19051673762937382
+  z: 0.42539831697937136
+orientation:
+  x: -0.5110296725027479
+  y: -0.4871694632536378
+  z: -0.49121330557197196
+  w: 0.5101216289513247
+ans
+-1.6415    1.5279   -0.0757
+ans =
+  -94.0515   87.5428   -4.3353
+
+
+11/21
+・初期位置に問題
+-->現在位置からの変位でpathを作っているがそこで衝突やアームの関係でpathが作れないと動かない可能性
+-->初期位置を変更&加工方向も変更

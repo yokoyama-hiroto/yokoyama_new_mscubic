@@ -89,7 +89,7 @@
     <!--
     <model name='box_surface'>
       <static>False</static>
-      <pose>0.7 0 0.5 0 0 0</pose>
+      <pose>0.7 0 0.201 0 0 0</pose>
       <link name='link'>
         <inertial>
           <mass>0.0001</mass>
@@ -105,7 +105,7 @@
         <collision name='collision'>
           <geometry>
             <box>
-              <size>0.01 1 1</size>
+              <size>1 1 0.001</size>
             </box>
           </geometry>
           <max_contacts>10</max_contacts>
@@ -143,7 +143,7 @@
     -->
     <model name='unit_box'>
       <static>True</static>
-      <pose>1.2 0 0.5 0 0 0</pose>
+      <pose>0.7 0 -0.3 0 0 0</pose>
       <link name='link'>
         <inertial>
           <mass>0.0001</mass>

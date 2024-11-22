@@ -7,13 +7,13 @@ import geometry_msgs.msg
 import math
 from math import pi
 import threading
+from moveit_commander import PlanningSceneInterface
 from tf.transformations import quaternion_matrix, translation_matrix, concatenate_matrices
 from geometry_msgs.msg import Pose, WrenchStamped, Vector3, Quaternion
 
 
 k = 0.002/(0.002 + 1) #ローパスフィルタの係数
 f_threshold = 5 #接触力
-global group_arm 
 global f_current
 global f_previous
 global f_filtered
@@ -44,6 +44,7 @@ def low_pass_filter(raw_force_value): #センサ値をローパスフィルタ�
   return f_filtered
 
 def calculate_force_absolute(f): #絶対値を算出
+  print("force", f)
   f_absolute = math.sqrt(f[0]*f[0] + f[1]*f[1] + f[2]*f[2])
   return f_absolute
 
@@ -52,8 +53,8 @@ def calculate_force_ratio(f): #センサー値の成分比率を算出
   f_ratio = [n/f_absolute for n in f]
   return f_ratio
 
-def get_current_pose(): #現在のtcpの位置姿勢を取得
-  current_pose = group_arm.get_current_pose("tool0").pose #tool0 or tcp
+def get_current_pose(group_arm): #現在のtcpの位置姿勢を取得
+  current_pose = group_arm.get_current_pose("tcp").pose #"tool0" or "tcp"
   return current_pose
 
 def euler_to_quaternion(euler):
@@ -64,13 +65,13 @@ def quaternion_to_euler(quaternion):
     e = tf.transformations.euler_from_quaternion((quaternion.x, quaternion.y, quaternion.z, quaternion.w))
     return Vector3(x=e[0], y=e[1], z=e[2])
 
-def home_position():
-  MS_cubic_home = [0, -2, 2, -1, 0, pi-2] #['shoulder_pan', 'shoulder_lift', 'elbow', 'wrist_1', 'wrist_2', 'wrist_3', 'ee_fixed']
+def home_position(group_arm):
+  MS_cubic_home = [0, -1.5, 1.5, 0, pi/2, -pi/2] #['shoulder_pan', 'shoulder_lift', 'elbow', 'wrist_1', 'wrist_2', 'wrist_3']
   group_arm.set_joint_value_target(MS_cubic_home)
   group_arm.go()
   
 def scaling_plan(plan, scale):
-  if scale > 1.0:
+  if scale > 1:
     print("too fast")
     sys.exit()
   
@@ -87,8 +88,8 @@ def scaling_plan(plan, scale):
   
   return plan
 
-def move_global_system(distance, speed): #distanceはglobal座標系
-  current_pose = get_current_pose()
+def move_global_system(group_arm, distance, speed): #global座標系
+  current_pose = get_current_pose(group_arm)
 
   target_pose = Pose()
   target_pose.position.x = current_pose.position.x + distance[0]
@@ -96,14 +97,18 @@ def move_global_system(distance, speed): #distanceはglobal座標系
   target_pose.position.z = current_pose.position.z + distance[2]
   target_pose.orientation = current_pose.orientation
 
-  group_arm.set_pose_target(target_pose)
-  (plan, fraction) = group_arm.compute_cartesian_path([current_pose, target_pose], 0.01, 0.0) #直線パスの生成
+  #group_arm.set_pose_target(target_pose)
+  (plan, fraction) = group_arm.compute_cartesian_path([current_pose, target_pose], 0.001, 0.0)
   scaling_plan(plan, speed)
+  if flag_debug_mode:
+    print(plan)
+    print("fraction:", fraction)
   group_arm.execute(plan)
   return fraction #直線パスの成功率
 
-def rotate(angle, speed):
-  current_pose = get_current_pose()
+
+def rotate(group_arm, angle, speed):
+  current_pose = get_current_pose(group_arm)
 
   target_pose = Pose()
   target_pose.position = current_pose.position
@@ -117,14 +122,17 @@ def rotate(angle, speed):
   target_pose.orientation.z = target_pose_quaternion.z
   target_pose.orientation.w = target_pose_quaternion.w
 
-  group_arm.set_pose_target(target_pose)
+  #group_arm.set_pose_target(target_pose)
   (plan, fraction) = group_arm.compute_cartesian_path([current_pose, target_pose], 0.01, 0.0)
   scaling_plan(plan, speed)
+  if flag_debug_mode:
+    print(plan)
+    print("fraction:", fraction)
   group_arm.execute(plan)
   return fraction #直線パスの成功率
 
-def move_drill_system(distance, speed): #手先座標
-  current_pose = get_current_pose()
+def move_drill_system(group_arm, distance, speed): #手先座標
+  current_pose = get_current_pose(group_arm)
 
   #手先座標系での目標位置と姿勢を定義
   goal_position_hand = [distance[0], distance[1], distance[2]] 
@@ -157,25 +165,36 @@ def move_drill_system(distance, speed): #手先座標
   target_pose.orientation.z = goal_orientation_global[2]
   target_pose.orientation.w = goal_orientation_global[3]
 
-  group_arm.set_pose_target(target_pose)
+  #group_arm.set_pose_target(target_pose)
   (plan, fraction) = group_arm.compute_cartesian_path([current_pose, target_pose], 0.01, 0.0)
   scaling_plan(plan, speed)
+  if flag_debug_mode:
+    print(plan)
+    print("fraction:", fraction)
   group_arm.execute(plan)
   return fraction #直線パスの成功率
 
-def move_until_touch():
+def move_until_touch(group_arm):
+  rospy.sleep(0.01)
   f_absolute = calculate_force_absolute([x - y for x, y in zip(filtered_force_value, initial_force)])
+  if flag_debug_mode:
+    print(f_absolute)
+
   while f_absolute < f_threshold:
-    is_moved = move_drill_system([0.001, 0, 0], 0.02)
-    f_absolute = calculate_force_absolute(f_current)
+    is_moved = move_global_system(group_arm, [0, 0, -0.01], 1)
+    f_absolute = calculate_force_absolute([x - y for x, y in zip(filtered_force_value, initial_force)])
+    if flag_debug_mode:
+      print(f_absolute)
+
     if not is_moved:
-      print("Error during moveing")
+      print("Error before touch")
       sys.exit()
   return True
 
 
 
-def angle_rotate_find(pitch_or_yaw): #回転計測
+def angle_rotate_find(group_arm, pitch_or_yaw): #連続計測
+  rospy.sleep(0.01)
   #使う成分の指定(0:x, 1:y, 2:z)
   if pitch_or_yaw == "pitch":
     r = 2
@@ -187,26 +206,31 @@ def angle_rotate_find(pitch_or_yaw): #回転計測
   
   f = [0, 0]
   angle = [0, 0, 0]
-  f[0] = calculate_force_ratio([x - y for x, y in zip(filtered_force_value, initial_force)])
+  f[0] = calculate_force_ratio([x - y for x, y in zip(filtered_force_value, initial_force)])[r]
   f[1] = f[0]
   if f[0] > 0.1:
     angle[r] = 0.1
   elif f[0] < 0.1:
     angle[r] = 0.1
-  rotate(angle, 0.02)
+  print(angle)
+  rotate(group_arm, angle, 0.02)
+  rospy.sleep(0.01)
 
   while abs(f[1]) > 0.1:
     f[0] = f[1]
-    f[1] = calculate_force_ratio([x - y for x, y in zip(filtered_force_value, initial_force)])
+    f[1] = calculate_force_ratio([x - y for x, y in zip(filtered_force_value, initial_force)])[r]
     if f[0] > f[1]:
       angle[r] = 0.1
     else:
       angle[r] = -0.1
-    rotate(angle, 0.02)
+    print(angle)
+    rotate(group_arm, angle, 0.02)
+    rospy.sleep(0.01)
 
-  #print("Finish correction ", pitch_or_yaw)
+  print("Finish correction ", pitch_or_yaw)
   
-def angle_correction(pitch_or_yaw, η): #逐次補正のコア部分
+def angle_correction_b(group_arm, pitch_or_yaw, η): #逐次補正
+  rospy.sleep(0.01)
   #使う成分の指定(0:x, 1:y, 2:z)
   if pitch_or_yaw == "pitch":
     r = 2
@@ -222,7 +246,9 @@ def angle_correction(pitch_or_yaw, η): #逐次補正のコア部分
   #print("Δθ1=",Δθ1)
   angle = [0,0,0]
   angle[r] = Δθ1
-  rotate(angle, 0.02)
+  print(angle)
+  rotate(group_arm, angle, 0.02)
+  rospy.sleep(0.01)
 
   #2回目以降の補正
   f1 = f0
@@ -232,12 +258,14 @@ def angle_correction(pitch_or_yaw, η): #逐次補正のコア部分
     f1 = calculate_force_ratio([x - y for x, y in zip(filtered_force_value, initial_force)])
     Δθi = Δθi * f1[r] * η / (f1[r] - f0[r])
     angle[r] = Δθi
-    #print("Δθi=",Δθi)
-    rotate(angle, 0.02)
+    print(angle)
+    rotate(group_arm, angle, 0.02)
+    rospy.sleep(0.01)
 
   #print("Finish correction ", pitch_or_yaw)
 
-def angle_integration(pitch_or_yaw, n): #統合補正のコア部分
+def angle_integration(group_arm, pitch_or_yaw, n): #統合補正
+  rospy.sleep(0.01)
   #使う成分の指定(0:x, 1:y, 2:z)
   if pitch_or_yaw == "pitch":
     r = 2
@@ -253,25 +281,31 @@ def angle_integration(pitch_or_yaw, n): #統合補正のコア部分
   ΔΦ = []
   #初回の補正
   f0 = calculate_force_ratio([x - y for x, y in zip(filtered_force_value, initial_force)])
-  ΔΦ[0] = math.degrees(-1 * math.atan(f0[r]/f0[0])) #単位は度
+  ΔΦ.append(math.degrees(-1 * math.atan(f0[r]/f0[0]))) #単位は度
   #print("Δθ1=",Δθ[0])
-  Δθ[0] = ΔΦ[0] + 1
-  angle[r] = Δθ
-  rotate(angle, 0.02)
+  Δθ.append(ΔΦ[0])
+  angle[r] = Δθ[0]
+  print(angle)
+  rotate(group_arm, angle, 0.02)
+  rospy.sleep(0.01)
 
   #2回目以降の補正
   for i in range(n):
     fi = calculate_force_ratio([x - y for x, y in zip(filtered_force_value, initial_force)])
-    ΔΦ[i+1] = math.degrees(-1 * math.atan(fi[r]/fi[0])) #単位は度
+    ΔΦ.append(math.degrees(-1 * math.atan(fi[r]/fi[0]))) #単位は度
     #print("Δθi=",Δθ[i+1])
-    Δθ[i+1] = ΔΦ[i+1] + 1
+    Δθ.append(ΔΦ[i+1])
     angle[r] = Δθ[i+1]
-    rotate(angle, 0.02)
+    print(angle)
+    rotate(group_arm, angle, 0.02)
+    rospy.sleep(0.01)
 
   #最終的な補正値の決定
   Δθ_mean = (sum(Δθ) + sum(ΔΦ))/(n+1)
   angle[r] = Δθ_mean - sum(Δθ)
-  rotate(angle, 0.02)
+  print("angle",angle)
+  rotate(group_arm, angle, 0.02)
+  rospy.sleep(0.01)
 
 
   #print("Finish correction ", pitch_or_yaw)
@@ -279,34 +313,43 @@ def angle_integration(pitch_or_yaw, n): #統合補正のコア部分
 
 
 
-def angle_correction_experiment():
-  move_until_touch()
-  angle_rotate_find("pitch")
-  #angle_correction("pitch", 0.5)
-  #angle_integration("pitch", 4)
+def angle_correction_experiment(group_arm):
+  move_until_touch(group_arm)
+  angle_rotate_find(group_arm, "pitch")
+  #angle_correction_b(group_arm, "pitch", 0.5)
+  #angle_integration(group_arm, "pitch", 4)
 
-def drill_experiment():
-  move_until_touch()
-  angle_correction("pitch", 0.02)
+def drill_experiment(group_arm):
+  move_until_touch(group_arm)
+  angle_rotate_find(group_arm, "pitch", 0.02)
 
 
-def execute_experiment():
+def execute_experiment(group_arm):
+  home_position(group_arm)
+  #rotate(group_arm, [0, pi/9, 0], 1) #0,1,3,5->0,pi/180,pi/60,pi/36初期入射角設定
+  
+  setting_initial = move_global_system(group_arm, [0.0, 0.0, -0.2], 1) #加工位置決定
   global initial_force
-  home_position()
-  #rotate([0, 0, 1], 0.5) #0,1,3,5初期入射角設定
-  setting_initial = move_global_system([1.0, 0.0, 0.0], 0.5) #加工位置決定
-  if setting_initial > 0.5:
+  initial_force = list(filtered_force_value)
+  move_until_touch(group_arm)
+
+  if flag_debug_mode:
+    setting_initial = 1
+  
+  rospy.sleep(1)
+  if setting_initial > 0.8:
     initial_force = filtered_force_value
     print("Set initial")
     experiment_type = input("experiment type (a:angle correction or d:drilling)")
     if experiment_type == "a":
-      angle_correction_experiment()
+      angle_correction_experiment(group_arm)
     elif experiment_type == "d":
-      drill_experiment()
+      drill_experiment(group_arm)
     else:
       print("Input correct type")
       sys.exit()
   else:
+    print(setting_initial)
     print("Error during setting initial")
     sys.exit()
 
@@ -314,16 +357,19 @@ def execute_experiment():
 
 if __name__ == '__main__':
   try:
-    environment = input("1:simulation or 2:real robot")
-    if environment == "1":
+    sim_or_real = input("1:simulation or 2:real?")
+    if sim_or_real == "1":
       ur5_arm = "ur5_arm"
       rostopic_force = "ft_sensor/raw"
-    elif environment == "2":
+    elif sim_or_real == "2":
       ur5_arm ="manipulator"
       rostopic_force = "wrench"
     else:
       print("Input 1 or 2")
       sys.exit()
+
+    global flag_debug_mode
+    flag_debug_mode = False
 
     rospy.init_node('DrillAngleCorrection')
     moveit_commander.roscpp_initialize(sys.argv)
@@ -334,12 +380,14 @@ if __name__ == '__main__':
 
     group_arm.set_max_velocity_scaling_factor(1.0)
 
-    # 力センサのトピックをSubscribeするコールバック関数を設定
+    # 力センサのトピックをSubscribeするコールバック関数
     rospy.Subscriber(rostopic_force, WrenchStamped, force_sensor_callback)
 
-    # ロボットの制御を行うスレッドを開始
-    control_thread = threading.Thread(target=execute_experiment())
+    # ロボット制御を行うスレッドを開始
+    control_thread = threading.Thread(target=execute_experiment(group_arm))
     control_thread.start()
+
+
 
     rospy.spin()
 
