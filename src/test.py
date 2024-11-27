@@ -291,7 +291,7 @@ def mover(group_arm):
   #move_global_system(group_arm, [1.0, 0.0, 0.0])
   #move_X_up(group_arm)
   rospy.sleep(1)
-  move(group_arm, [0,0,0.1])
+  # move(group_arm, [0,0,0.1])
   #move_roll_up(group_arm)
   """
   rospy.sleep(sleep_time)

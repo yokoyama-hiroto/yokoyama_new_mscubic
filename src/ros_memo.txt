@@ -1,6 +1,10 @@
 moveit source
 https://github.com/moveit/moveit/blob/master/moveit_commander/src/moveit_commander/move_group.py
 
+Constraints
+chrome-extension://efaidnbmnnnibpcajpcglclefindmkaj/https://robo-marc.github.io/tutorials/marc2023/tutorial-melodic-mycobot-0.1.1.pdf
+
+
 
 
 
@@ -40,7 +44,7 @@ trajectory_execution.launch.xmlファイルの<param name="trajectory_execution/
 (参考)https://github.com/moveit/moveit/issues/3183
 
 ・直線的には動かないけど、回転は動く
--->違いは何？
+-->違いは何？-->姿勢
 
 ・call_back関数が悪さをしている可能性(センサー値を拾う関数がないとfraction=0.7程度で動く)
 -->import WrenchStampedを入れたら動かなくなったが消しても戻らなくなってしまった
@@ -66,3 +70,40 @@ ans =
 ・初期位置に問題
 -->現在位置からの変位でpathを作っているがそこで衝突やアームの関係でpathが作れないと動かない可能性
 -->初期位置を変更&加工方向も変更
+-->どんな動きにも対応して問題なく動けるようになった
+
+・wrist_3_jointのPゲインを根本ジョイント程度に高めると手先が比較的安定した
+
+11/22
+・move_until_touch()の動作を確認
+    force [0.09184344898889307, 0.11109757180865243, 0.28964580481220636]
+    force [-62.17529394751888, -66.53760354625679, -65.1266540941679]
+-->5Nにぴったりに収めるのはシミュレーション上難しいが「5Nを超えたらストップ」はできている　特に暴れたりはしていない
+-->ただ力が全成分同じくらい(空間的斜め方向)なのはあっているのか？
+-->モデルに問題がなくなったら解決
+
+・ロボットアームの振動の問題
+-->土台がめり込んでたので初期スポーン位置を0.01上方に
+-->手先のpid1ゲインが小さかったので大きくした
+
+・constraintsの存在
+-->ロボットアームが動ける範囲に制約をつける(compute_cartesian_pathとは別のアプローチ)
+
+・ショートカットctrl+/で一括コメントアウト
+・Alt+Zで折り返し
+
+・補正の度に引いて5Nにしなければならない(あるいは成分比で止めどころを探す？)
+
+tex
+pxjahyper健一先輩の博論を参考にしてリンクを作れる
+
+
+11/25
+rollとyawが似たような回転？
+-->ジンバルロック:pitch角(euler角の一つの角度)が±90°付近では特異点となりrollとyawの区別がつかない
+-->90°回転によって他2つの軸が一致しどちらの軸で傾けたのか区別がつかない
+
+
+
+
+

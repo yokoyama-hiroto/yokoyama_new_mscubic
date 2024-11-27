@@ -86,7 +86,6 @@
       <elevation>0</elevation>
       <heading_deg>0</heading_deg>
     </spherical_coordinates>
-    <!--
     <model name='box_surface'>
       <static>False</static>
       <pose>0.7 0 0.201 0 0 0</pose>
@@ -125,7 +124,7 @@
         <visual name='visual'>
           <geometry>
             <box>
-              <size>0.01 1 1</size>
+              <size>1 1 0.01</size>
             </box>
           </geometry>
           <material>
@@ -140,7 +139,6 @@
         <kinematic>0</kinematic>
       </link>
     </model>
-    -->
     <model name='unit_box'>
       <static>True</static>
       <pose>0.7 0 -0.3 0 0 0</pose>
