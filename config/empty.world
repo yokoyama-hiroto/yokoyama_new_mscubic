@@ -86,6 +86,7 @@
       <elevation>0</elevation>
       <heading_deg>0</heading_deg>
     </spherical_coordinates>
+    <!--
     <model name='box_surface'>
       <static>False</static>
       <pose>0.7 0 0.201 0 0 0</pose>
@@ -139,9 +140,10 @@
         <kinematic>0</kinematic>
       </link>
     </model>
+    -->
     <model name='unit_box'>
       <static>True</static>
-      <pose>0.7 0 -0.3 0 0 0</pose>
+      <pose>1 0 -0.3 0 0 0</pose>
       <link name='link'>
         <inertial>
           <mass>0.0001</mass>
@@ -163,14 +165,18 @@
           <max_contacts>10</max_contacts>
           <surface>
             <contact>
-              <ode/>
+              <ode>
+                <!-- <kp>20000000</kp> <!--2*10^6?--> -->
+              </ode>
             </contact>
             <bounce/>
             <friction>
               <torsional>
-                <ode/>
+                <ode>
+                  <mu>0</mu>
+                  <mu2>0</mu2>
+                </ode>
               </torsional>
-              <ode/>
             </friction>
           </surface>
         </collision>

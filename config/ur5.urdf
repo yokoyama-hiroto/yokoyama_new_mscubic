@@ -311,7 +311,13 @@
         <child link="tcp" />
         <origin rpy="0.0 0.0 0.0" xyz="-0.04 0.04 0.03" />
     </joint>
-    <link name="tcp" />
+    <link name="tcp">
+        <inertial>
+            <mass value="0.000000001" />
+            <origin rpy="0 0 0" xyz="0.0 0.0 0.0" />
+            <inertia ixx="0.00000002" ixy="0.000000000000000003" ixz="0.00000000000000003" iyy="0.00000000000003" iyz="0.0000000000000003" izz="0.0000000000000000000003" />
+        </inertial>
+    </link>
     <!-- ROS base_link to UR 'Base' Coordinates transform -->
     <link name="base" />
     <joint name="base_link-base_fixed_joint" type="fixed">
