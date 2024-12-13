@@ -27,7 +27,7 @@ f_filtered = [0, 0, 0]
 raw_force_value = [0, 0, 0]
 filtered_force_value = [0, 0, 0]
 sleep_time = 0.01
-correction_speed = 0.5
+correction_speed = 0.02
 
 def force_sensor_callback(msg): #センサ値を取得するコールバック関数
   global raw_force_value
@@ -69,7 +69,7 @@ def quaternion_to_euler(quaternion):
     return Vector3(x=e[0], y=e[1], z=e[2])
 
 def home_position():
-  MS_cubic_home = [0, -1.4, 1.4, 0, pi/2, -pi/2] #['shoulder_pan', 'shoulder_lift', 'elbow', 'wrist_1', 'wrist_2', 'wrist_3']
+  MS_cubic_home = [0, -1.2, 1.2, 0, pi/2, -pi/2] #['shoulder_pan', 'shoulder_lift', 'elbow', 'wrist_1', 'wrist_2', 'wrist_3']
   group_arm.set_joint_value_target(MS_cubic_home)
   group_arm.go()
   
@@ -254,6 +254,54 @@ def move_drill_system_constraints(distance, speed): #ドリル座標系cartesian
   print("group_arm.go", result)
   return result
 
+
+
+def rotate_constraints(angle, speed): #ドリル座標系cartesianpathを使わない
+  current_pose = get_current_pose()
+  
+  constraints = Constraints()
+  constraints.name = "rotate"
+  orientation_constraint = OrientationConstraint()
+  orientation_constraint.header.frame_id = group_arm.get_planning_frame()
+  orientation_constraint.link_name = group_arm.get_end_effector_link()
+  angle_quaternion = tf.transformations.quaternion_from_euler(angle[0], angle[1], angle[2])
+  current_quaternion = [current_pose.orientation.x, current_pose.orientation.y, current_pose.orientation.z, current_pose.orientation.w]
+  target_pose = quaternion_multiply(current_quaternion, angle_quaternion)
+  target_orientation = Quaternion(target_pose[0], target_pose[1], target_pose[2], target_pose[3])
+  orientation_constraint.orientation = target_orientation
+  orientation_constraint.absolute_x_axis_tolerance = 0.01
+  orientation_constraint.absolute_y_axis_tolerance = 0.01
+  orientation_constraint.absolute_z_axis_tolerance = 0.4
+  orientation_constraint.weight = 1.0
+  position_constraint = PositionConstraint()
+  position_constraint.header.frame_id = group_arm.get_planning_frame()
+  position_constraint.link_name = group_arm.get_end_effector_link()
+  position_constraint.target_point_offset.x = 1
+  position_constraint.target_point_offset.y = 1
+  position_constraint.target_point_offset.z = 1
+  position_constraint.weight = 1.0
+  constraints.orientation_constraints.append( orientation_constraint )
+  constraints.position_constraints.append( position_constraint )
+  group_arm.set_path_constraints( constraints )
+
+    
+  #geometry_msgs.msg.Pose形式に変更
+  target_pose = [0, 0, 0]
+  target_pose[0] = current_pose.position.x
+  target_pose[1] = current_pose.position.y
+  target_pose[2] = current_pose.position.z
+
+  group_arm.set_max_velocity_scaling_factor(speed)
+  group_arm.set_max_acceleration_scaling_factor(1.0)
+
+  group_arm.set_position_target(target_pose)
+  result = group_arm.go()
+  if flag_debug_mode:
+    print("target_orientation", target_orientation)
+    print("target_position", target_pose)
+    print("group_arm.go", result)
+  return result
+
 """
 def rotate_euler(angle, speed):#euler角の特異点では軌道がおかしくなる
   current_pose = get_current_pose(group_arm)
@@ -296,7 +344,7 @@ def rotate(angle, speed):
   target_pose.orientation.y = target_pose_quaternion[1]
   target_pose.orientation.z = target_pose_quaternion[2]
   target_pose.orientation.w = target_pose_quaternion[3]
-
+  print(target_pose)
   #group_arm.set_pose_target(target_pose)
   (plan, fraction) = group_arm.compute_cartesian_path([current_pose, target_pose], 0.001, 0.0)
   scaling_plan(plan, speed)
@@ -354,7 +402,7 @@ def leave_from_surface():
     print("Left!")
   return True
 
-
+"""
 def angle_rotate_find(pitch_or_yaw): #連続計測
   rospy.sleep(sleep_time)
   #使う成分の指定(0:x, 1:y, 2:z)
@@ -416,7 +464,7 @@ def angle_rotate_find(pitch_or_yaw): #連続計測
   current_pose_euler = quaternion_to_euler(current_pose.orientation)
   print("Final pose", current_pose_euler)
   
-def angle_correction_b(pitch_or_yaw, η): #逐次補正
+def angle_correction_b(pitch_or_yaw, eta): #逐次補正
   rospy.sleep(sleep_time)
   #使う成分の指定(0:x, 1:y, 2:z)
   if pitch_or_yaw == "pitch":
@@ -433,10 +481,10 @@ def angle_correction_b(pitch_or_yaw, η): #逐次補正
   move_until_touch()
   #初回の補正
   f0 = calculate_force_ratio([x - y for x, y in zip(filtered_force_value, initial_force)])
-  Δθ1 = math.atan(f0[r]/f0[0]) #radian
-  #print("Δθ1=",Δθ1)
+  delta_theta1 = math.atan(f0[r]/f0[0]) #radian
+  #print("delta_theta1=",delta_theta1)
   angle = [0,0,0]
-  angle[a] = Δθ1
+  angle[a] = delta_theta1
   print("rotate_angle",angle)
   print("abs", f0[r])
   move_drill_system([0.01, 0, 0], correction_speed)
@@ -447,12 +495,12 @@ def angle_correction_b(pitch_or_yaw, η): #逐次補正
 
   #2回目以降の補正
   f1 = f0
-  Δθi = Δθ1
-  while Δθi > pi/360:
+  delta_theta_i = delta_theta1
+  while delta_theta_i > pi/360:
     f0 = f1
     f1 = calculate_force_ratio([x - y for x, y in zip(filtered_force_value, initial_force)])
-    Δθi = Δθi * f1[r] * η / (f1[r] - f0[r])
-    angle[a] = Δθi
+    delta_theta_i = delta_theta_i * f1[r] * eta / (f1[r] - f0[r])
+    angle[a] = delta_theta_i
     print("rotate_angle", angle)
     print("abs", f1[r])
     move_drill_system([0.01, 0, 0], correction_speed)
@@ -483,15 +531,15 @@ def angle_integration(pitch_or_yaw, n): #統合補正
   global initial_force
   
   angle = [0,0,0]
-  Δθ = []
-  ΔΦ = []
+  delta_theta = []
+  delta_fai = []
   move_until_touch()
   #初回の補正
   f0 = calculate_force_ratio([x - y for x, y in zip(filtered_force_value, initial_force)])
-  ΔΦ.append(math.atan(f0[r]/f0[0])) #単位はradian
-  #print("Δθ1=",Δθ[0])
-  Δθ.append(ΔΦ[0] * 1.1)
-  angle[a] = Δθ[0]
+  delta_fai.append(math.atan(f0[r]/f0[0])) #単位はradian
+  #print("delta_theta1=",delta_theta_[0])
+  delta_theta.append(delta_fai[0] * 1.1)
+  angle[a] = delta_theta[0]
   print("rotate_angle", angle)
   print("abs", f0[r])
   move_drill_system([0.01, 0, 0], correction_speed)
@@ -503,10 +551,10 @@ def angle_integration(pitch_or_yaw, n): #統合補正
   #2回目以降の補正
   for i in range(n):
     fi = calculate_force_ratio([x - y for x, y in zip(filtered_force_value, initial_force)])
-    ΔΦ.append(math.atan(fi[r]/fi[0])) #単位はradian
-    #print("Δθi=",Δθ[i+1])
-    Δθ.append(ΔΦ[i+1] * 1.1)
-    angle[a] = Δθ[i+1]
+    delta_fai.append(math.atan(fi[r]/fi[0])) #単位はradian
+    #print(delta_theta_i=",delta_theta[i+1])
+    delta_theta.append(delta_fai[i+1] * 1.1)
+    angle[a] = delta_theta[i+1]
     print("rotate_angle", angle)
     print("abs", fi[r])
     move_drill_system([0.01, 0, 0], correction_speed)
@@ -516,10 +564,10 @@ def angle_integration(pitch_or_yaw, n): #統合補正
     rospy.sleep(sleep_time)
 
   #最終的な補正値の決定
-  Δθ_mean = (sum(Δθ) + sum(ΔΦ))/(n+1)
-  angle[a] = Δθ_mean - sum(Δθ)
+  delta_theta_mean = (sum(delta_theta) + sum(delta_fai))/(n+1)
+  angle[a] = delta_theta_mean - sum(delta_theta)
   print("Last_angle_mean", angle)
-  print("Δθ&ΔΦ", Δθ, ΔΦ)
+  print("delta_theta&delta_fai", delta_theta, delta_fai)
   move_drill_system([0.01, 0, 0], correction_speed)
   rotate( angle, correction_speed)
   if calculate_force_absolute(filtered_force_value) < f_threshold:
@@ -532,7 +580,7 @@ def angle_integration(pitch_or_yaw, n): #統合補正
   current_pose = get_current_pose()
   current_pose_euler = quaternion_to_euler(current_pose.orientation)
   print("Final pose", current_pose_euler)
-
+"""
 
 
 
@@ -553,11 +601,11 @@ def angle_correction_experiment(experiment_type, pitch_or_yaw, parameter):
     error_p_previous = 0
     error_i = 0
   elif experiment_type == "b":
-    η = parameter
+    eta = parameter
   elif experiment_type == "c":
     n = parameter
-    Δθ = []
-    ΔΦ = []
+    delta_theta = []
+    delta_fai = []
   else:
     print("Input correct experiment type")
     sys.exit()
@@ -578,12 +626,12 @@ def angle_correction_experiment(experiment_type, pitch_or_yaw, parameter):
         if flag_debug_mode:
           print("PID gain", pid)
       elif experiment_type == "b":
-        Δθi = d * 0.9 * math.atan(f_ratio_current[r]/abs(f_ratio_current[0]))
-        angle[r] = Δθi
+        delta_theta_i = d * 0.9 * math.atan(f_ratio_current[r]/abs(f_ratio_current[0]))
+        angle[r] = delta_theta_i
       elif experiment_type == "c":
-        ΔΦ.append(d * math.atan(f_ratio_current[r]/abs(f_ratio_current[0])))
-        Δθ.append(ΔΦ[0] * 1.1)
-        angle[r] = Δθ[0]
+        delta_fai.append(d * math.atan(f_ratio_current[r]/abs(f_ratio_current[0])))
+        delta_theta.append(delta_fai[0] * 1.1)
+        angle[r] = delta_theta[0]
     elif cycle_number > 1:
       f_ratio_previous = f_ratio_current
       force_current = [x - y for x, y in zip(filtered_force_value, initial_force)]
@@ -603,18 +651,18 @@ def angle_correction_experiment(experiment_type, pitch_or_yaw, parameter):
           print("error_d", error_d)
           print("u", u)
       elif experiment_type == "b": #逐次補正
-        Δθi = -1 * Δθi * f_ratio_current[r] * η / (f_ratio_current[r] - f_ratio_previous[r]*abs(f_ratio_current[0])/abs(f_ratio_previous[0]))
-        angle[r] = Δθi
+        delta_theta_i = -1 * delta_theta_i * f_ratio_current[r] * eta / (f_ratio_current[r] - f_ratio_previous[r]*abs(f_ratio_current[0])/abs(f_ratio_previous[0]))
+        angle[r] = delta_theta_i
       elif experiment_type == "c": #統合補正
         if cycle_number < n+1:
-          ΔΦ.append(d * math.atan(f_ratio_current[r]/abs(f_ratio_current[0])))
-          Δθ.append(ΔΦ[cycle_number-1] * 1.1)
-          angle[r] = Δθ[cycle_number-1]
+          delta_fai.append(d * math.atan(f_ratio_current[r]/abs(f_ratio_current[0])))
+          delta_theta.append(delta_fai[cycle_number-1] * 1.1)
+          angle[r] = delta_theta[cycle_number-1]
         elif cycle_number == n + 1:
-          Δθ_mean = (sum(Δθ) + sum(ΔΦ))/(n+1)
-          angle[r] = Δθ_mean - sum(Δθ)
+          delta_theta__mean = (sum(delta_theta) + sum(delta_theta))/(n+1)
+          angle[r] = delta_theta__mean - sum(delta_theta)
           print("Last_angle_mean", angle)
-          print("Δθ&ΔΦ", Δθ, ΔΦ)
+          print("delta_theta&delta_fai", delta_theta, delta_fai)
         else:
           break
     else:
@@ -654,10 +702,10 @@ def drill_experiment():
 def execute_experiment():
   home_position()
   set_initial_angle = -pi/9 #0,1,3,5->0,pi/180,pi/60,pi/36初期入射角設定
-  rotate([0, 0, set_initial_angle], 1) 
+  rotate([0, 0, set_initial_angle], 1)
   print("initial_angle", set_initial_angle)
-
-  setting_initial_position = move_global_system([0.0, 0.0, -0.1], 1) #加工位置決定
+  sys.exit()
+  setting_initial_position = move_global_system([0.0, 0.0, -0.1], 0.02) #加工位置決定
   global initial_force
   initial_force = list(filtered_force_value)
   rospy.sleep(0.1)
@@ -697,7 +745,7 @@ if __name__ == '__main__':
     global experiment_parameter
     flag_experiment_mode = "a" #"a", "b", "c"
     flag_rotation_direction = "yaw" #"pitch", "yaw"
-    experiment_parameter = 6 #"η"(of "b")=0.5, 1.0, 1.5, "n"(of "c")=4
+    experiment_parameter = 6 #"eta"(of "b")=1.0, "n"(of "c")=4
 
     rospy.init_node('DrillAngleCorrection')
     moveit_commander.roscpp_initialize(sys.argv)

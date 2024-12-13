@@ -4,6 +4,8 @@ https://github.com/moveit/moveit/blob/master/moveit_commander/src/moveit_command
 Constraints
 chrome-extension://efaidnbmnnnibpcajpcglclefindmkaj/https://robo-marc.github.io/tutorials/marc2023/tutorial-melodic-mycobot-0.1.1.pdf
 
+シミュレータの制御形態と難しさ
+https://blog.robotics.tokyo/archives/244
 
 
 
